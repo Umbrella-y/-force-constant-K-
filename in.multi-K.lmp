@@ -1,0 +1,178 @@
+
+shell mkdir result
+##-----------------------------------------------------------
+variable k loop 10
+label loop
+shell mkdir result/$k
+clear
+##-----------------------------------------------------------
+units metal
+atom_style atomic
+atom_modify map array
+boundary p p p
+
+lattice fcc 4.04
+region box block -5 5 -5 5 -40 40
+##        -25--------------------------------------25    ##
+create_box 3 box
+region box1 block -5 5 -5 5 -40 40
+##        -25++++++++++++++++++0+++++++++++++++++++25    ##
+create_atoms 1 region box1
+region lower block INF INF INF INF -35 -25
+##        -25++20------16++++++0+++++++16------20++25    ##
+region upper block INF INF INF INF 25 35
+region mid block INF INF INF INF -25 25 
+region lo block INF INF INF INF INF -25
+region up block INF INF INF INF 25 INF
+##        -25++20------16++++++0+++++++16------20++25    ##
+region  middle union 3 mid lo up
+region ronghua union 2 upper lower
+##        -25lo+-20+lower+-16+mid+16+upper+20+up+25    ##
+group jisuan region mid##----------------------------------jisuanquyu
+group lower region lower 
+group upper region upper 
+group middle region middle
+group ronghua region ronghua
+set group lower type 1
+set group upper type 2
+set group middle type 3
+region kongwen block INF INF INF INF -40 40
+group kongwen region kongwen
+mass * 26.982
+
+velocity lower create 300 4928866 dist gaussian
+velocity upper create 300 4928866 dist gaussian
+velocity middle create 300 4928866 dist gaussian
+#velocity fix set 0 0 0 
+#fix f fix setforce 0 0 0
+pair_style eam/alloy
+pair_coeff * * Al-2009.eam.alloy Al Al Al
+thermo_style custom step ke pe temp press vol
+thermo 1
+#fix zwalls all wall/reflect zlo EDGE zhi EDGE
+timestep 0.001
+neighbor 0.3 bin
+neigh_modify every 5 delay 0 check yes
+
+##______________________________________________________________________
+compute keatom all ke/atom
+compute peatom all pe/atom 
+fix t1 kongwen npt temp 300 300 0.1 iso 1 1 1
+dump d1 all custom 100 result/$k/300-950.dump id type x y z c_peatom c_keatom
+run 10000
+unfix t1
+fix t2 kongwen npt temp 300 950 0.1 iso 1 1 1
+run 70000
+unfix t2
+undump d1
+##______________________________________________________________________
+reset_timestep 0      
+dump d1 all custom 100 result/$k/950-950.dump id type x y z c_peatom c_keatom
+fix t3 kongwen npt temp 950 950 0.1 iso 1 1 1 
+velocity all create 950 1234758 dist gaussian
+run 1000
+velocity all create 950 1234758 dist gaussian
+run 1000
+velocity all create 950 1234758 dist gaussian
+run 1000
+velocity all create 950 1234758 dist gaussian
+run 1000
+velocity all create 950 1234758 dist gaussian
+run 1000
+unfix t3
+undump d1
+##______________________________________________________________________
+reset_timestep 0    
+dump d1 all custom 100 result/$k/950-1200.dump id type x y z c_peatom c_keatom
+fix f1 middle setforce 0 0 0
+velocity middle set 0 0 0
+fix t41 lower nvt temp 950 1200 0.1 #iso 1 1 1
+fix t42 upper nvt temp 950 1200 0.1 #iso 1 1 1
+run 10000
+unfix t41
+unfix t42
+fix t41 lower nvt temp 1200 1200 0.1 #iso 1 1 1
+fix t42 upper nvt temp 1200 1200 0.1 #iso 1 1 1
+run 20000
+unfix t41
+unfix t42
+undump d1
+##______________________________________________________________________
+reset_timestep 0
+dump d1 all custom 100 result/$k/1200-950.dump id type x y z c_peatom c_keatom
+fix t51 lower nvt temp 1200 950 0.1 #iso 1 1 1
+fix t52 upper nvt temp 1200 950 0.1 #iso 1 1 1
+run 10000
+unfix t51
+unfix t52
+fix t51 lower nvt temp 950 950 0.1 #iso 1 1 1
+fix t52 upper nvt temp 950 950 0.1 #iso 1 1 1
+run 10000
+unfix t51
+unfix t52
+unfix f1
+undump d1
+##______________________________________________________________________
+reset_timestep 0    
+fix t6 all npt temp 950 950 0.1 iso 1 1 1
+run 5000
+velocity all create 950 126786785 dist gaussian
+run 1000
+velocity all create 950 12367867 dist gaussian
+run 1000
+velocity all create 950 12678758 dist gaussian
+run 1000
+velocity all create 950 12378958 dist gaussian
+run 1000
+velocity all create 950 12347788 dist gaussian
+run 1000
+dump d2 all custom 100 result/$k/L-S-L-jieguo.dump id type x y z c_peatom c_keatom
+run 10000
+write_data moxing.data
+run 1 
+unfix t6
+undump d2
+##______________________________________________________________________
+## Vibration Process on going-------------------------------------------
+reset_timestep 0  
+compute peratom all stress/atom NULL
+compute ch all chunk/atom bin/1d z lower 0.05 units reduced
+compute tem all temp/chunk ch temp
+compute js jisuan chunk/atom bin/1d z lower 0.05 units reduced
+compute jstemp jisuan temp/chunk ch temp
+fix tt all npt temp 950 950 0.1 iso 1 1 1
+
+fix i1 upper indent $k plane z 121 lo
+fix i2 lower indent $k plane z -121 hi
+#variable r equal swiggle(0,5,0.04)
+#fix i all indent 10 sphere 0 0 65 v_r side out
+
+fix d1 all ave/chunk 1 10 10 ch c_peratom[1] c_peratom[2] c_peratom[3] file result/$k/total-vib-stress.txt
+fix t1 all ave/time 1 10 10  c_tem[1] file result/$k/total-vib-temp.txt mode vector
+fix d2 jisuan ave/chunk 1 10 10 ch c_peratom[1] c_peratom[2] c_peratom[3] file result/$k/jisuan-vib-stress.txt
+fix t2 jisuan ave/time 1 10 10  c_tem[1] file result/$k/jisuan-vib-temp.txt mode vector
+dump         1 all custom 100 result/$k/Vibration.dump id type x y z c_peatom c_keatom
+run 20000
+#unfix i
+unfix i1
+unfix i2
+undump 1
+unfix d1
+unfix t1
+unfix d2 
+unfix t2
+unfix tt
+##______________________________________________________________________
+reset_timestep 0    
+fix tt all npt temp 950 950 0.1 iso 1 1 1
+
+fix d1 all ave/chunk 1 10 10 ch c_peratom[1] c_peratom[2] c_peratom[3] file result/$k/total-novib-stress.txt
+fix t1 all ave/time 1 10 10  c_tem[1] file result/$k/total-novib-temp.txt mode vector
+fix d2 jisuan ave/chunk 1 10 10 ch c_peratom[1] c_peratom[2] c_peratom[3] file result/$k/jisuan-novib-stress.txt
+fix t2 jisuan ave/time 1 10 10  c_tem[1] file result/$k/jisuan-novib-temp.txt mode vector
+
+dump         1 all custom 100 result/$k/Stop-Vibration.dump id type x y z c_peatom c_keatom
+run 20000
+##______________________________________________________________________
+next k
+jump in.duoK.lmp loop
